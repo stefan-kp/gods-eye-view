@@ -36,6 +36,39 @@ services:
       traefik.enable: "false"
     logging: *logging
 
+  # Generate the file in a volume. Compose cannot inject configs.content into
+  # a service with a read-only root filesystem.
+  prepare-login:
+    image: ${GEV_IMAGE:?GEV_IMAGE is required}
+    restart: "no"
+    read_only: true
+    network_mode: none
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      disable: true
+    environment:
+      GEV_ALLOWED_EMAILS: ${GEV_ALLOWED_EMAILS:?GEV_ALLOWED_EMAILS is required}
+    command:
+      - node
+      - -e
+      - |
+        const fs = require('node:fs');
+        const path = require('node:path');
+        const emails = process.env.GEV_ALLOWED_EMAILS.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (!emails.length) throw new Error('GEV_ALLOWED_EMAILS must contain an email address');
+        const target = path.join(process.argv[1], 'allowed-emails.txt');
+        fs.writeFileSync(target + '.tmp', emails.join('\n') + '\n', { mode: 0o644 });
+        fs.renameSync(target + '.tmp', target);
+      - /app/.gev-cache
+    # This path belongs to the image's non-root user. The volume contains only
+    # the email list and is separate from the app cache.
+    volumes:
+      - login-config:/app/.gev-cache
+    labels:
+      traefik.enable: "false"
+    logging: *logging
+
   login:
     image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
     restart: unless-stopped
@@ -45,6 +78,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      prepare-login:
+        condition: service_completed_successfully
     expose: ["4180"]
     environment:
       OAUTH2_PROXY_PROVIDER: google
@@ -57,7 +92,7 @@ services:
       OAUTH2_PROXY_REVERSE_PROXY: "true"
       # These addresses may supply proxy headers. They do NOT bypass login.
       OAUTH2_PROXY_TRUSTED_PROXY_IPS: ${TRAEFIK_TRUSTED_IPS:?TRAEFIK_TRUSTED_IPS is required}
-      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/allowed-emails.txt
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/gev-login/allowed-emails.txt
       OAUTH2_PROXY_COOKIE_NAME: __Host-gev_session
       OAUTH2_PROXY_COOKIE_PATH: /
       OAUTH2_PROXY_COOKIE_SECURE: "true"
@@ -71,9 +106,8 @@ services:
       OAUTH2_PROXY_PASS_BASIC_AUTH: "false"
       OAUTH2_PROXY_PASS_USER_HEADERS: "false"
       OAUTH2_PROXY_REQUEST_LOGGING: "false"
-    configs:
-      - source: allowed_emails
-        target: /etc/oauth2-proxy/allowed-emails.txt
+    volumes:
+      - login-config:/etc/gev-login:ro
     networks: [proxy, backend]
     labels:
       traefik.enable: "true"
@@ -87,13 +121,10 @@ services:
       traefik.http.services.gev-login.loadbalancer.healthcheck.path: /ping
     logging: *logging
 
-configs:
-  allowed_emails:
-    content: ${GEV_ALLOWED_EMAILS:?GEV_ALLOWED_EMAILS is required}
-
 volumes:
   cache:
   logs:
+  login-config:
 
 networks:
   proxy:

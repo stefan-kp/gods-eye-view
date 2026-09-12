@@ -56,7 +56,8 @@ Trage die Werte in `.env` ein:
 
 Die Vorlage zeigt das Format für mehrere erlaubte Adressen.
 Eine leere Liste verhindert den Start. Füge keine Freigabe für alle E-Mail-Domains hinzu.
-Compose erzeugt die Datei mit den erlaubten Adressen aus `.env`.
+Der Dienst `prepare-login` erzeugt die Datei mit den erlaubten Adressen aus `.env`.
+Er endet danach mit dem Status 0. Der Anmelde-Container liest die Datei aus einem eigenen Volume mit Schreibschutz.
 Eine zusätzliche Datei auf dem Server ist dafür nicht nötig.
 
 Erzeuge den Zufallswert für die Cookies auf dem Server:
@@ -157,4 +158,5 @@ Er benötigt keinen laufenden Docker-Dienst. Der Docker-Workflow führt diese Pr
 
 Die lokale Prüfung mit dem offiziellen OAuth2-Proxy-Programm 7.15.4 akzeptierte die ENV-Werte.
 Sie sperrte Anfragen ohne Anmeldung und prüfte die Google-Weiterleitung mit Testwerten.
-Ein vollständiger Test mit Docker, Traefik und echten Google-Konten steht noch aus.
+Der Docker-Workflow prüft zusätzlich den echten Start mit Compose und die Sperre ohne Anmeldung.
+Ein vollständiger Test mit Traefik und echten Google-Konten steht noch aus.

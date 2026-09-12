@@ -48,6 +48,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.runner }}
       - name: Test container startup and runtime configuration
         run: node scripts/test-docker.mjs gev:test
+      - name: Test login startup with Docker Compose
+        run: node scripts/test-traefik-compose.mjs gev:test
 
   publish:
     needs: test
