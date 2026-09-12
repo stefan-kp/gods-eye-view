@@ -105,7 +105,10 @@ try {
       networks: { proxy: { external: false, name: `${project}-proxy` } },
     }));
     const docker = (...args) => {
-      const r = spawnSync('docker', args, { encoding: 'utf8', timeout: 180_000 });
+      const r = spawnSync('docker', args, {
+        encoding: 'utf8', timeout: 180_000,
+        env: { PATH: process.env.PATH, HOME: process.env.HOME },
+      });
       assert.equal(r.status, 0, r.stderr);
       return r.stdout.trim();
     };
