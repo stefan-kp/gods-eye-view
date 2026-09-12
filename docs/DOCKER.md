@@ -115,6 +115,11 @@ It removes its test containers and test volume when it exits.
 
 ## Network access
 
+For an existing Traefik server, use the separate
+[Traefik and Google login template](../deploy/traefik/README.md).
+It restricts access to an email list and keeps the app off shared server networks.
+Use that Compose file on its own; do not merge it with the local file.
+
 The supplied Compose file binds the host port to `127.0.0.1`.
 It provides a local application, not a public service.
 

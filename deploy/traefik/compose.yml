@@ -1,0 +1,104 @@
+# Standalone server configuration. Do not merge with the local compose.yaml.
+# Traefik must already use the external proxy network and the le resolver.
+name: gods-eye-view
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "5m"
+    max-file: "3"
+
+services:
+  app:
+    image: ${GEV_IMAGE:?GEV_IMAGE is required}
+    init: true
+    restart: unless-stopped
+    expose: ["4173"]
+    environment:
+      HOST: 0.0.0.0
+      PORT: "4173"
+      GEV_KEY_SETUP_DISABLED: "1"
+      # Select values explicitly: OAuth secrets must not reach the app.
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
+      CESIUM_ION_TOKEN: ${CESIUM_ION_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AISSTREAM_API_KEY: ${AISSTREAM_API_KEY:-}
+      FIRMS_MAP_KEY: ${FIRMS_MAP_KEY:-}
+      TOMTOM_API_KEY: ${TOMTOM_API_KEY:-}
+      OPENSKY_CLIENT_ID: ${OPENSKY_CLIENT_ID:-}
+      OPENSKY_CLIENT_SECRET: ${OPENSKY_CLIENT_SECRET:-}
+      LL2_API_TOKEN: ${LL2_API_TOKEN:-}
+    volumes:
+      - cache:/app/.gev-cache
+      - logs:/app/.gev-logs
+    networks: [backend]
+    labels:
+      traefik.enable: "false"
+    logging: *logging
+
+  login:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    depends_on:
+      app:
+        condition: service_healthy
+    expose: ["4180"]
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID is required}
+      OAUTH2_PROXY_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?OAUTH2_PROXY_COOKIE_SECRET is required}
+      OAUTH2_PROXY_REDIRECT_URL: https://${APP_DOMAIN:?APP_DOMAIN is required}/oauth2/callback
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: http://app:4173/
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      # These addresses may supply proxy headers. They do NOT bypass login.
+      OAUTH2_PROXY_TRUSTED_PROXY_IPS: ${TRAEFIK_TRUSTED_IPS:?TRAEFIK_TRUSTED_IPS is required}
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/allowed-emails.txt
+      OAUTH2_PROXY_COOKIE_NAME: __Host-gev_session
+      OAUTH2_PROXY_COOKIE_PATH: /
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_HTTPONLY: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_EXPIRE: 8h
+      OAUTH2_PROXY_COOKIE_REFRESH: 1h
+      OAUTH2_PROXY_PROXY_WEBSOCKETS: "true"
+      OAUTH2_PROXY_API_ROUTES: '^/api/'
+      OAUTH2_PROXY_PASS_ACCESS_TOKEN: "false"
+      OAUTH2_PROXY_PASS_BASIC_AUTH: "false"
+      OAUTH2_PROXY_PASS_USER_HEADERS: "false"
+      OAUTH2_PROXY_REQUEST_LOGGING: "false"
+    configs:
+      - source: allowed_emails
+        target: /etc/oauth2-proxy/allowed-emails.txt
+    networks: [proxy, backend]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
+      traefik.http.routers.gev-login.rule: Host(`${APP_DOMAIN:?APP_DOMAIN is required}`)
+      traefik.http.routers.gev-login.entrypoints: websecure
+      traefik.http.routers.gev-login.tls: "true"
+      traefik.http.routers.gev-login.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-le}
+      traefik.http.routers.gev-login.service: gev-login
+      traefik.http.services.gev-login.loadbalancer.server.port: "4180"
+      traefik.http.services.gev-login.loadbalancer.healthcheck.path: /ping
+    logging: *logging
+
+configs:
+  allowed_emails:
+    content: ${GEV_ALLOWED_EMAILS:?GEV_ALLOWED_EMAILS is required}
+
+volumes:
+  cache:
+  logs:
+
+networks:
+  proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK:-proxy}
+  # Project-local network, with outbound internet access for provider APIs.
+  # Do not attach the app to the server's shared internal or proxy network.
+  backend:
