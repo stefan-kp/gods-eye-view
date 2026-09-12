@@ -82,8 +82,8 @@ Bei einem anderen Netz musst du auch `TRAEFIK_NETWORK` und den Prüfbefehl anpas
 Erstelle in der Google-Konsole einen Anmeldeclient vom Typ „Webanwendung“.
 Trage die folgenden Adressen mit deiner Domain ein:
 
-- Ursprung: `https://DEINE-DOMAIN`
-- Weiterleitungsadresse: `https://DEINE-DOMAIN/oauth2/callback`
+- Ursprung: `https://gev.kaproblem.com`
+- Weiterleitungsadresse: `https://gev.kaproblem.com/oauth2/callback`
 
 Konfiguriere auch den Zustimmungsbildschirm in Google.
 Füge bei einer Google-App im Testbetrieb die zugelassenen Testnutzer hinzu.
